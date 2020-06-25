@@ -1,0 +1,15 @@
+roll
+hand(own)
+bet
+
+turn order based on join order
+	- subsequent games swap this
+
+state:
+- Numdice for both players
+- hands for both players
+- current Bet
+	- if called, need last bet
+	- who made bet
+- who's turn
+
