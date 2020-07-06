@@ -1,16 +1,7 @@
-const app = require("http").createServer(handler);
-const io = require("socket.io")(app);
+const io = require("./node_modules/socket.io")
+const server = io.listen(8008)
 
-app.listen(8008);
-
-const startingDice = 5;
-let state = {
-  currentBet: null,
-  activePlayer: 0,
-  id: {},
-  players: {},
-};
-
+const startingDice = 5
 /*
 state = {
   currentBet:{numDice:int, dieValue:int}
@@ -32,27 +23,79 @@ state = {
 }
 */
 
+let state = {
+  currentBet: {
+    numDice: 1,
+    dieValue: 0,
+  },
+  activePlayer: 0,
+  id: {},
+  players: {},
+}
+
+const generateValidBetOptions = (isFirstRound) => {
+  let currentBet = state["currentBet"]
+  let numEnemyDice = startingDice
+  let numDice = startingDice
+  let validBetOptions = []
+
+  if (!isFirstRound) {
+    numEnemyDice = state["players"][1]["numDice"]
+    numDice = state["players"][0]["numDice"]
+    validBetOptions.push("Call")
+  }
+
+  let totalDice = numDice + numEnemyDice
+
+  //Only valid dice are above current num and current die
+
+  for (let i = currentBet.numDice; i <= totalDice; i++) {
+    let j = i === currentBet.numDice ? currentBet.dieValue + 1 : 1
+    for (j; j <= 4; j++) {
+      validBetOptions.push(i + "-" + j)
+    }
+  }
+
+  return validBetOptions
+}
+
+const getPlayerSocketByNumber = (playerNumber) => {
+  return server.sockets.connected[state.players[playerNumber].id]
+}
+
 const emitState = () => {
-  let player1Id = state["players"][0]["id"];
-  let player2Id = state["players"][1]["id"];
+  let player1socket = getPlayerSocketByNumber(0)
+  let player2socket = getPlayerSocketByNumber(1)
 
-  io.to(player1Id).emit("update", state["players"][0]);
-  io.to(player1Id).emit("updateEnemyDice", state["players"][1]["numDice"]);
+  player1socket.emit("update", state["players"][0])
+  player1socket.emit("updateEnemyDice", state["players"][1]["numDice"])
 
-  io.to(player2Id).emit("update", state["players"][1]);
-  io.to(player2Id).emit("updateEnemyDice", state["players"][0]["numDice"]);
-};
+  player2socket.emit("update", state["players"][1])
+  player2socket.emit("updateEnemyDice", state["players"][0]["numDice"])
+}
 
-const startGame = () => {
-  let players = state["players"];
-  players[0]["hand"] = generateHand(players[0]["numDice"]);
-  players[1]["hand"] = generateHand(players[1]["numDice"]);
-  emitState();
-};
+const generateHand = (numDice) => {
+  let hand = []
+  console.log(state.players)
+  for (let i = 0; i < numDice; i++) {
+    hand.push(Math.ceil(Math.random() * 4))
+  }
+
+  return hand
+}
 
 const getNumPlayers = () => {
-  return Object.keys(state["players"]).length;
-};
+  return Object.keys(state["players"]).length
+}
+
+const startGame = () => {
+  console.log("Game Starting...")
+
+  let players = state.players
+  players[0]["hand"] = generateHand(players[0]["numDice"])
+  players[1]["hand"] = generateHand(players[1]["numDice"])
+  emitState()
+}
 
 const addPlayer = (socket) => {
   if (getNumPlayers() < 2) {
@@ -60,104 +103,92 @@ const addPlayer = (socket) => {
       id: socket.id,
       hand: null,
       numDice: startingDice,
-    };
-
-    state["id"][socket.id] = getNumPlayers();
-    state["players"][getNumPlayers()] = newPlayer;
-  } else {
-    return null;
-  }
-};
-
-const generateHand = (numDice) => {
-  let hand = [];
-
-  for (let i = 0; i < numDice; i++) {
-    hand.push(Math.ceil(Math.random() * 4));
-  }
-
-  return hand;
-};
-
-const getValidBetOptions = () => {
-  let currentBet = state["currentBet"];
-  let totalDice =
-    state["players"][0]["numDice"] + state["players"][1]["numDice"];
-  let validBetOptions = [];
-
-  //Only valid dice are above current num and current die
-  for (let numDice = currentBet[numDice]; numDice <= totalDice; numDice++) {
-    for (let dieValue = currentBet[dieValue] + 1; dieValue < 5; dieValue++) {
-      validBetOptions.push(numDice + "-" + dieValue);
     }
-  }
 
-  return validBetOptions;
-};
+    state.id[socket.id] = getNumPlayers()
+    state.players[getNumPlayers()] = newPlayer
+  } else {
+    return null
+  }
+}
+
+const removePlayer = (socket) => {
+  delete state.players[socket.id]
+}
 
 const updateCurrentBet = (numDice, dieValue) => {
-  state["currentBet"]["numDice"] = parseInt(numDice);
-  state["currentBet"]["dieValue"] = parseInt(dieValue);
-};
+  state["currentBet"]["numDice"] = parseInt(numDice)
+  state["currentBet"]["dieValue"] = parseInt(dieValue)
+}
 
-// Call FAILS if there are less dice than current bet says there are
 const isCallValid = () => {
-  let player1 = state["players"][0];
-  let player2 = state["players"][1];
-  let allDice = player1["hand"].concat(player2["hand"]);
-  let sum = 0;
+  let player1 = state["players"][0]
+  let player2 = state["players"][1]
+  let allDice = player1["hand"].concat(player2["hand"])
+  let sum = 0
 
   for (const die of allDice) {
     if (die === state["currentBet"]["dieValue"]) {
-      sum++;
+      sum++
     }
   }
-
+  console.log(sum, state["currentBet"])
   if (sum > state["currentBet"]["numDice"]) {
-    return false;
+    return false
   } else {
-    return true;
+    return true
   }
-};
+}
 
 const removeDie = (playerNum) => {
-  player["numDice"]--;
-  player["hand"] = generateHand(player.key);
-};
+  let player = state.players[playerNum]
+  player.numDice--
+  player.hand = generateHand(player.key)
+}
 
-//on = listener
-//emit = sender
-io.on("connection", (socket) => {
-  socket.on("join", () => {
-    addPlayer(socket);
-    if (getNumPlayers() === 2) {
-      startGame();
-    }
-  });
+// event fired every time a new client connects:
+server.on("connection", (socket) => {
+  console.info(`Client connected [id=${socket.id}]`)
+  addPlayer(socket)
+  socket.emit("validBets", generateValidBetOptions(true))
+  console.log(getNumPlayers())
+
+  if (getNumPlayers() === 2) {
+    startGame()
+    getPlayerSocketByNumber(state.activePlayer).emit("turnNotification")
+  }
+
+  // when socket disconnects, remove it from the list:
+  socket.on("disconnect", () => {
+    console.info(`Client disconnected [id=${socket.id}]`)
+    removePlayer(socket)
+  })
 
   socket.on("bet", (bet) => {
-    if (state["activePlayer"] === state["id"][socket.id]) {
-      if (bet === "call" && state["currentBet"] === null) {
-        return;
-      } else if (bet === "call") {
-        let callResult = isCallValid();
-
+    if (state.activePlayer === state["id"][socket.id]) {
+      if (bet === "Call") {
+        let callResult = isCallValid()
+        console.log(callResult)
         if (callResult) {
-          removeDie((state["activePlayer"] + 1) % 2);
+          removeDie((state.activePlayer + 1) % 2)
         } else {
-          removeDie(state["activePlayer"]);
+          removeDie(state.activePlayer)
         }
-
-        socket.emit("callResult", callResult);
-        emitState();
-
-        return;
+        socket.emit("callResult", callResult)
+        state.currentBet = {
+          numDice: 1,
+          dieValue: 0,
+        }
+        emitState()
+        return
       }
+      let [numDice, dieValue] = bet.split("-")
 
-      let [numDice, dieValue] = bet.split("-");
-      updateCurrentBet(numDice, dieValue);
-      socket.emit("validBets", generateValidBetOptions());
-      state["activePlayer"] = (state["activePlayer"] + 1) % 2;
+      updateCurrentBet(numDice, dieValue)
+      state.activePlayer = (state.activePlayer + 1) % 2
+      getPlayerSocketByNumber(0).emit("validBets", generateValidBetOptions(false))
+      getPlayerSocketByNumber(1).emit("validBets", generateValidBetOptions(false))
+      getPlayerSocketByNumber(state.activePlayer).emit("turnNotification")
     }
-  });
-});
+  })
+})

@@ -1,4 +1,6 @@
-const io = require("server/socket.io-client");
+const io = require("socket.io-client");
+const ioClient = io.connect("http://localhost:8000");
+
 // Accepts validBets as strings in form "numDice-dieValue"
 const populateBets = (validBets) => {
   let betSelector = document.getElementById("bet-select");

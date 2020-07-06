@@ -1,0 +1,22 @@
+* {
+  padding: 0;
+  margin: 0;
+}
+
+body, html {
+  height: 100%;
+  width: 100%
+}
+
+.diceContainer {
+  min-width: 100%;
+  min-height: 20%;
+  border-style: solid;
+  box-sizing: border-box;
+  border-width: 3px;
+}
+
+#mydice {
+  position: absolute;
+  bottom: 0px;
+}
